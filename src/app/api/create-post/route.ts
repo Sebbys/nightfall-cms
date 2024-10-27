@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     await octokit.repos.createOrUpdateFileContents({
       owner: 'sebbys',
       repo: 'nightfall-cms',
-      path: `posts/${title.toLowerCase().replace(/\s+/g, '-')}.md`,
+      path: `src/app/posts/${title.toLowerCase().replace(/\s+/g, '-')}.md`,
       message: `Add new post: ${title}`,
       content: Buffer.from(content).toString('base64'),
       branch: 'main'
