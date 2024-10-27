@@ -48,7 +48,7 @@ category: [${frontmatter.category.join(', ')}]
 ${content}`
 
     try {
-      const response = await fetch('nightfall-cms/api/save-mdx', {
+      const response = await fetch('/api/save-mdx', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
