@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     const completion = await openai.completions.create({
       model: "gpt-3.5-turbo-instruct", // Updated from deprecated davinci-002
-      prompt: `Write a blog post about: ${prompt}\n\nTitle: \nDescription: \nContent:, format it to be more readable and engaging. MDX format is a must, table and code block are optional. Make it fun and use emojis and also do some easy analogy to make it easier to understand.`,
+      prompt: `Write a blog post about: ${prompt}\n\nTitle: \nDescription: \nContent:, MDX format is a must. Make it fun and use emojis and also do some easy analogy to make it easier to understand. Use bullet points and lists to make it more readable and add separations. For bullets point just use ## as H2, for each heading remember to add spacing between the heading and the content. \n\n`,
       max_tokens: 1000,
       temperature: 0.7,
     });
@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
     const [title, description, ...contentParts] = generatedText.split('\n').filter(Boolean);
 
     return NextResponse.json({
-      title: title.replace('Title: ', ''),
-      description: description.replace('Description: ', ''),
-      content: contentParts.join('\n').replace('Content:', '').trim(),
+      title: title.replace('Title:', ''),
+      description: description.replace('Description:', ''),
+      content: contentParts.join('\n').replace('', '').trim(),
     });
 
   } catch (error) {

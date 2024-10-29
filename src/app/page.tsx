@@ -24,7 +24,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
-import { Save, Settings, X, Eye, Edit, Plus,Wand2, Image as ImageIcon } from 'lucide-react'
+import { Save, Settings, X, Eye, Edit, Plus, Wand2, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
@@ -36,6 +36,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { MDXRemote } from 'next-mdx-remote'
+import { serialize } from 'next-mdx-remote/serialize'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import rehypePrism from 'rehype-prism-plus'
+import 'katex/dist/katex.min.css'
+import 'prismjs/themes/prism-tomorrow.css'
 
 const CATEGORIES = [
   "Technology",
@@ -64,41 +72,22 @@ interface PreviewProps {
 }
 
 const Preview: React.FC<PreviewProps> = ({ content, frontmatter }) => {
-  const renderContent = () => {
-    let rendered = content
-      .replace(/^### (.*$)/gim, '<h3 class="scroll-m-20 text-2xl font-semibold tracking-tight">$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2 class="scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0">$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1 class="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl">$1</h1>')
-      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-      .replace(/\*(.*)\*/gim, '<em>$1</em>')
-      .replace(/^\* (.*$)/gim, '<li class="mt-2">$1</li>')
-      .replace(/^\d\. (.*$)/gim, '<li class="mt-2">$1</li>')
-      .replace(/```([\s\S]*?)```/gm, '<pre class="mb-4 mt-6 overflow-x-auto rounded-lg bg-muted p-4"><code>$1</code></pre>')
-      .replace(/`([^`]+)`/g, '<code class="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold">$1</code>')
-      .replace(/\[([^\]]+)\]$$([^)]+)$$/g, '<a href="$2" class="font-medium text-primary underline underline-offset-4">$1</a>')
-      .replace(/!\[([^\]]+)\]$$([^)]+)$$/g, '<img src="$2" alt="$1" class="rounded-md border" />')
-      .replace(/^> (.*$)/gim, '<blockquote class="mt-6 border-l-2 pl-6 italic">$1</blockquote>')
-      .replace(/\|(.+)\|/g, (match, p1) => {
-        const cells = p1.split('|').map((cell: string) => cell.trim());
-        const isHeader = cells.every((cell: string) => cell.startsWith('---'));
-        if (isHeader) {
-          return '';
-        }
-        const rowContent = cells.map((cell: any) => `<td class="p-2 border">${cell}</td>`).join('');
-        return `<tr>${rowContent}</tr>`;
-      })
-      .replace(/^(.+\|.+)$/gm, (match, p1) => {
-        if (p1.includes('|---')) {
-          const headerCells = p1.split('|').filter(Boolean).map((cell: string) => cell.trim());
-          const headerContent = headerCells.map((cell: any) => `<th class="p-2 font-bold border">${cell}</th>`).join('');
-          return `<table class="w-full border-collapse border"><thead><tr>${headerContent}</tr></thead><tbody>`;
-        }
-        return match;
-      })
-      .replace(/<\/tbody><\/table>\s*<table/g, '');
+  const [mdxSource, setMdxSource] = useState<any>(null)
 
-    return rendered;
-  }
+  React.useEffect(() => {
+    const compileMdx = async () => {
+      const compiled = await serialize(content, {
+        mdxOptions: {
+          remarkPlugins: [remarkGfm, remarkMath],
+          rehypePlugins: [rehypeKatex, rehypePrism],
+        },
+      })
+      setMdxSource(compiled)
+    }
+    compileMdx()
+  }, [content])
+
+  if (!mdxSource) return null
 
   return (
     <div className="prose dark:prose-invert max-w-none">
@@ -116,10 +105,7 @@ const Preview: React.FC<PreviewProps> = ({ content, frontmatter }) => {
           <p className="text-xl text-muted-foreground mt-2">{frontmatter.description}</p>
         )}
       </div>
-      <div 
-        className="mt-8"
-        dangerouslySetInnerHTML={{ __html: renderContent() }}
-      />
+      <MDXRemote {...mdxSource} />
     </div>
   )
 }
@@ -139,6 +125,8 @@ const MDXEditor: React.FC = () => {
   const [darkMode, setDarkMode] = useState(false)
   const [articleIdea, setArticleIdea] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [image, setImage] = useState<File | null>(null)
   const { toast } = useToast()
 
   const handleFrontmatterChange = (name: keyof Frontmatter, value: string | Category[]) => {
@@ -211,18 +199,13 @@ ${content}`
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (event: ProgressEvent<FileReader>) => {
-        const img = new Image()
-        img.onload = () => {
-          const imgTag = `![${file.name}](${event.target?.result as string})`
-          setContent(prevContent => prevContent + '\n\n' + imgTag)
-        }
-        img.src = event.target?.result as string
-      }
-      reader.readAsDataURL(file)
+      setImage(file)
+      toast({
+        title: "Image selected",
+        description: "Image will be uploaded when you save the post.",
+      })
     }
-  }, [])
+  }, [toast])
 
   const insertTable = () => {
     const tableTemplate = `
@@ -232,6 +215,15 @@ ${content}`
 | Row 2    | Data     | Data     |
 `
     setContent(prevContent => prevContent + '\n' + tableTemplate + '\n')
+  }
+
+  const insertMathBlock = () => {
+    const mathTemplate = `
+$$
+\\frac{1}{\\sqrt{2\\pi\\sigma^2}} e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}
+$$
+`
+    setContent(prevContent => prevContent + '\n' + mathTemplate + '\n')
   }
 
   const generateArticle = async () => {
@@ -354,9 +346,13 @@ ${content}`
               </TabsList>
               <TabsContent value="edit">
                 <div className="flex gap-2 mb-2">
-                  <Button variant="outline" size="sm" onClick={() => document.getElementById('image-upload')?.click()}>
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    Add Image
+                  <Button variant="outline" size="sm" onClick={() => document.getElementById('image-upload')?.click()} disabled={isUploading}>
+                    {isUploading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                    )}
+                    {isUploading ? 'Uploading...' : 'Add Image'}
                   </Button>
                   <input
                     id="image-upload"
@@ -364,10 +360,16 @@ ${content}`
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageUpload}
+                    disabled={isUploading}
                   />
+
                   <Button variant="outline" size="sm" onClick={insertTable}>
                     <Plus className="mr-2 h-4 w-4" />
                     Insert Table
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={insertMathBlock}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Insert Math
                   </Button>
                   <Dialog>
                     <DialogTrigger asChild>
@@ -411,7 +413,7 @@ ${content}`
                 />
               </TabsContent>
               <TabsContent value="preview">
-                <ScrollArea className="h-[500px] w-full rounded-md border p-4">
+                <ScrollArea className="h-[500px] w-full  rounded-md border p-4">
                   <Preview content={content} frontmatter={frontmatter} />
                 </ScrollArea>
               </TabsContent>
@@ -485,7 +487,6 @@ ${content}`
                       </SelectItem>
                     ))}
                   </SelectContent>
-                
                 </Select>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {frontmatter.category.map(category => (
